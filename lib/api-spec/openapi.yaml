@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Price Agent Browser API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: compare
+    description: Price comparison operations
 paths:
   /healthz:
     get:
@@ -24,6 +25,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /compare:
+    post:
+      operationId: compareProducts
+      tags: [compare]
+      summary: Compare product prices
+      description: Search for a product across multiple platforms and return price comparison data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompareRequest"
+      responses:
+        "200":
+          description: Successful comparison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompareResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /history:
+    get:
+      operationId: getSearchHistory
+      tags: [compare]
+      summary: Get recent search history
+      description: Returns the last N product searches
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Search history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryResponse"
 components:
   schemas:
     HealthStatus:
@@ -34,3 +85,138 @@ components:
       required:
         - status
 
+    CompareRequest:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Product name or URL to search for
+      required:
+        - query
+
+    PlatformResult:
+      type: object
+      properties:
+        platform:
+          type: string
+          description: Platform name (Amazon, Flipkart, Croma)
+        title:
+          type: string
+          description: Product title
+        price:
+          type: number
+          nullable: true
+          description: Listed price in INR
+        originalPrice:
+          type: number
+          nullable: true
+          description: Original price before discount in INR
+        discount:
+          type: number
+          nullable: true
+          description: Discount percentage
+        rating:
+          type: number
+          nullable: true
+          description: Product rating out of 5
+        reviewCount:
+          type: integer
+          nullable: true
+          description: Number of reviews
+        shippingCost:
+          type: number
+          nullable: true
+          description: Shipping cost in INR (0 if free)
+        deliveryEstimate:
+          type: string
+          nullable: true
+          description: Estimated delivery time
+        effectivePrice:
+          type: number
+          nullable: true
+          description: Effective price including shipping
+        link:
+          type: string
+          description: Product URL
+        imageUrl:
+          type: string
+          nullable: true
+          description: Product image URL
+        inStock:
+          type: boolean
+          description: Whether product is in stock
+        error:
+          type: string
+          nullable: true
+          description: Error message if scraping failed
+      required:
+        - platform
+        - link
+        - inStock
+
+    CompareResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlatformResult"
+        bestDeal:
+          $ref: "#/components/schemas/PlatformResult"
+          nullable: true
+        searchId:
+          type: integer
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - query
+        - results
+        - timestamp
+
+    SearchRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        query:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlatformResult"
+        bestDeal:
+          $ref: "#/components/schemas/PlatformResult"
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - id
+        - query
+        - results
+        - timestamp
+
+    HistoryResponse:
+      type: object
+      properties:
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchRecord"
+      required:
+        - history
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message

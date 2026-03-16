@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Price Agent Browser"
+version = "1.0.0"
+id = "artifacts/price-agent-browser"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 22544
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/price-agent-browser run dev"
+
+[services.env]
+PORT = "22544"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/price-agent-browser", "run", "build"]
+publicDir = "artifacts/price-agent-browser/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

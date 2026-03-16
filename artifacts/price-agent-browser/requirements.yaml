@@ -1,0 +1,18 @@
+packages:
+  "framer-motion": "For smooth page transitions and staggered list animations"
+  "lucide-react": "For beautiful consistent iconography"
+  "clsx": "For conditional class merging in UI components"
+  "tailwind-merge": "For resolving Tailwind class conflicts in reusable components"
+
+images:
+  - path: "artifacts/price-agent-browser/public/images/hero-bg.png"
+    description: "Abstract elegant 3d gradient waves in soft blue and white, clean modern tech background, professional lighting"
+    aspect_ratio: "16:9"
+  - path: "artifacts/price-agent-browser/public/images/logo.png"
+    description: "Minimal geometric abstract logo mark in deep blue, clean professional, representing search and comparison, transparent background"
+    aspect_ratio: "1:1"
+
+notes:
+  - Using generated Orval React Query hooks from @workspace/api-client-react
+  - Expecting standard Tailwind v4 setup
+  - Relying on /api/compare and /api/history endpoints

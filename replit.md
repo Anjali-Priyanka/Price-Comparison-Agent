@@ -1,8 +1,8 @@
-# Workspace
+# Price Agent Browser
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+An AI-powered product price comparison tool that searches Amazon, Flipkart, and Croma to find the best deal for any product.
 
 ## Stack
 
@@ -10,87 +10,80 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **API framework**: Express 5
+- **Frontend**: React + Vite + TailwindCSS (artifacts/price-agent-browser)
+- **API framework**: Express 5 (artifacts/api-server)
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
+- **HTML parsing**: jsdom (for scraping)
 - **Build**: esbuild (CJS bundle)
 
 ## Structure
 
 ```text
-artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+workspace/
+├── artifacts/
+│   ├── api-server/             # Express API server
+│   │   └── src/
+│   │       ├── scrapers/       # Platform scrapers + AI agent orchestrator
+│   │       │   ├── agent.ts    # Orchestrates all scrapers, finds best deal
+│   │       │   ├── amazon.ts   # Amazon.in scraper
+│   │       │   ├── flipkart.ts # Flipkart scraper
+│   │       │   ├── croma.ts    # Croma scraper
+│   │       │   └── types.ts    # Shared PlatformResult type
+│   │       └── routes/
+│   │           ├── compare.ts  # POST /api/compare, GET /api/history
+│   │           └── health.ts   # GET /api/healthz
+│   └── price-agent-browser/    # React + Vite frontend
+│       └── src/
+│           ├── components/     # ResultCard, SearchHero, HistorySection, PlatformIcon
+│           ├── pages/          # home.tsx
+│           └── App.tsx
+├── lib/
+│   ├── api-spec/               # OpenAPI spec + Orval codegen config
+│   ├── api-client-react/       # Generated React Query hooks
+│   ├── api-zod/                # Generated Zod schemas
+│   └── db/
+│       └── src/schema/
+│           └── searches.ts     # searches table (stores search history)
+└── pnpm-workspace.yaml
 ```
 
-## TypeScript & Composite Projects
+## API Endpoints
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+- `POST /api/compare` — body: `{ query: string }` → returns price comparison from all platforms
+- `GET /api/history?limit=10` — returns recent searches
+- `GET /api/healthz` — health check
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+## Features
 
-## Root Scripts
+1. User enters a product name or URL
+2. Agent searches Amazon, Flipkart, and Croma in parallel
+3. Extracts price, discount, rating, shipping, delivery, and links
+4. Calculates effective price (price + shipping)
+5. Highlights the best deal
+6. Stores search history in PostgreSQL
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+## Running in Development
 
-## Packages
+```bash
+# Start API server
+pnpm --filter @workspace/api-server run dev
 
-### `artifacts/api-server` (`@workspace/api-server`)
+# Start frontend
+pnpm --filter @workspace/price-agent-browser run dev
+```
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+## Database
 
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+PostgreSQL via Replit. Schema managed with Drizzle ORM.
 
-### `lib/db` (`@workspace/db`)
+```bash
+# Push schema changes
+pnpm --filter @workspace/db run push
+```
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
+## Notes
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
-
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+- Amazon scraping works reliably. Flipkart and Croma may return errors due to bot detection (429/403) — this is handled gracefully as partial results.
+- Results from successful platforms are still displayed with the best deal highlighted.
